@@ -16,7 +16,7 @@ Every set is saved with the time you logged it, how many reps, and the weight in
 - Sets today / target (e.g. `2/3`), a rest timer since your last set, and a 🏆 when a set beats your best estimated 1-rep max.
 - **History**: every session by date. Tap × to delete a mistake.
 - **Progress**: a chart per exercise for top set, estimated 1RM (Epley), volume, or reps, plus a table of every session.
-- **Settings**: add your own exercises, load your past handwritten notes, export/import a backup (JSON) or a CSV.
+- **Settings**: connect your Google Sheet, add your own exercises, load your past handwritten notes, export/import a backup (JSON) or a CSV.
 
 ## Running it
 
@@ -26,7 +26,13 @@ It's a static site with no build step: `index.html`, `style.css`, `app.js`, `see
   "Add to Home Screen". After the first visit it also works offline.
 - **Locally**: `python3 -m http.server` in this folder, then open http://localhost:8000.
 
-Data is stored in the browser on that device (localStorage). Use **Export backup** now and then.
+## Where your data is saved
+
+Connect a Google Sheet (Settings → Google Sheet) and every set is saved as a row in a Sheet in your own Drive.
+The app loads from the Sheet when it opens, and keeps a copy on the phone so logging works offline.
+Setup takes about 5 minutes: see [google-sheet/README.md](google-sheet/README.md).
+
+Without a Sheet connected, sets are only stored in that phone's browser, and the badge at the top says "Not backed up".
 
 ## Past notes
 

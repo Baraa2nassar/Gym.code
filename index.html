@@ -13,7 +13,10 @@
 </head>
 <body>
   <header class="top">
-    <h1>Gym Log</h1>
+    <div class="title-row">
+      <h1>Gym Log</h1>
+      <button class="sync-pill warn" id="syncPill" type="button">Not backed up</button>
+    </div>
     <nav class="tabs" role="tablist">
       <button class="tab active" data-view="log">Log</button>
       <button class="tab" data-view="history">History</button>
@@ -41,6 +44,23 @@
     </section>
 
     <section id="view-settings" class="view">
+      <div class="panel">
+        <h2>Google Sheet</h2>
+        <p class="muted">Saves every set to a Google Sheet in your Drive, so nothing is lost if this phone is cleared or replaced.
+          Logging still works offline and uploads when you're back online.
+          <a href="https://github.com/Baraa2nassar/Gym.code/blob/HEAD/google-sheet/README.md" target="_blank" rel="noopener">Setup steps</a></p>
+        <p id="cloudStatus" class="status-line"></p>
+        <div class="stack">
+          <input id="cloudUrl" type="url" inputmode="url" autocomplete="off" placeholder="Web app URL (https://script.google.com/macros/s/…/exec)">
+          <input id="cloudKey" type="password" autocomplete="off" placeholder="Secret key">
+          <div class="inline wrap">
+            <button class="btn primary" id="cloudConnect" type="button">Connect</button>
+            <button class="btn" id="cloudSync" type="button">Sync now</button>
+            <button class="btn" id="cloudDisconnect" type="button">Disconnect</button>
+          </div>
+        </div>
+      </div>
+
       <div class="panel">
         <h2>Body weight</h2>
         <p class="muted">Used for assisted pull-ups: effective load = body weight − assist.</p>
@@ -76,7 +96,7 @@
 
       <div class="panel">
         <h2>Backup</h2>
-        <p class="muted">Data is saved on this device only. Export a backup now and then.</p>
+        <p class="muted">A file copy of everything, as extra insurance.</p>
         <div class="inline wrap">
           <button class="btn" id="exportJson">Export backup (JSON)</button>
           <button class="btn" id="exportCsv">Export CSV</button>
@@ -86,7 +106,7 @@
 
       <div class="panel danger">
         <h2>Danger zone</h2>
-        <button class="btn danger" id="clearAll">Delete all data</button>
+        <button class="btn danger" id="clearAll">Delete data on this device</button>
       </div>
     </section>
   </main>

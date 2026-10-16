@@ -1,5 +1,5 @@
 // Network-first cache so the app still opens with no signal at the gym.
-const CACHE = 'gymlog-v1';
+const CACHE = 'gymlog-v2';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'seed.js', 'manifest.json', 'icon.svg'];
 
 self.addEventListener('install', e => {

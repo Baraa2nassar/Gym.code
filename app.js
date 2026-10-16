@@ -61,7 +61,7 @@
   ];
 
   // ---------- storage ----------
-  function emptyDb() { return { entries: [], custom: [], settings: {}, last: {} }; }
+  function emptyDb() { return { entries: [], custom: [], settings: {}, last: {}, pendingAdd: [], pendingDel: [], configDirty: false }; }
   function loadDb() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -350,7 +350,9 @@
     const mine = e1rm(effLoad(e, ex), reps);
     if (prev.length && mine > best + 0.01) e.pr = true;
     db.entries.push(e);
+    queueAdd(e.id);
     save();
+    syncSoon();
     renderLog();
     const kgTxt = ex.type === 'barbell' || ex.type === 'dumbbell' || ex.type === 'machine' ? ` (${kg(w)} kg)` : '';
     toast(`${e.pr ? '🏆 New PR! ' : 'Logged: '}${setText(e, ex)}${kgTxt}`);
@@ -361,7 +363,9 @@
     if (!e) return;
     if (!confirm(`Delete ${exById(e.ex).name}: ${setText(e, exById(e.ex))} (${fmtDate(e.ts)} ${fmtTime(e.ts)})?`)) return;
     db.entries = db.entries.filter(x => x.id !== entryId);
+    queueDel(entryId);
     save();
+    syncSoon();
     render();
   }
 
@@ -616,6 +620,10 @@
   // SETTINGS VIEW
   // =====================================================================
   function renderSettings() {
+    const c = cloud();
+    $('#cloudUrl').value = c ? c.url : '';
+    $('#cloudKey').value = c ? c.key : '';
+    renderCloudStatus();
     $('#bwInput').value = db.settings.bw || '';
     $('#customType').innerHTML = Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
     $('#customDay').innerHTML = DAYS.map(d => `<option value="${d.id}" ${d.id === currentDay ? 'selected' : ''}>${d.name}</option>`).join('');
@@ -627,7 +635,9 @@
   $('#bwSave').addEventListener('click', () => {
     const v = Number($('#bwInput').value);
     db.settings.bw = v > 0 ? round1(v) : 0;
+    db.configDirty = true;
     save();
+    syncSoon();
     toast(v > 0 ? `Bodyweight saved: ${fmtW(v)} lb (${kg(v)} kg)` : 'Bodyweight cleared');
   });
 
@@ -637,7 +647,9 @@
     const name = String(f.get('name')).trim();
     if (!name) return;
     db.custom.push({ id: 'c-' + uid(), name, type: f.get('type'), day: f.get('day'), target: String(f.get('target') || '').trim() });
+    db.configDirty = true;
     save();
+    syncSoon();
     ev.target.reset();
     renderSettings();
     toast(`Added ${name}`);
@@ -649,7 +661,9 @@
     const c = db.custom.find(x => x.id === b.dataset.rmcustom);
     if (!c || !confirm(`Remove "${c.name}" from your plan? Logged sets stay in your history.`)) return;
     db.custom = db.custom.filter(x => x !== c);
+    db.configDirty = true;
     save();
+    syncSoon();
     renderSettings();
   });
 
@@ -677,15 +691,19 @@
     const have = new Set(db.entries.map(e => e.id));
     const add = seedEntries().filter(e => !have.has(e.id));
     db.entries.push(...add);
+    add.forEach(e => queueAdd(e.id));
     save();
+    syncSoon();
     toast(add.length ? `Loaded ${add.length} sets from your notes` : 'Past notes are already loaded');
   });
 
   $('#removeSeed').addEventListener('click', () => {
     const n = db.entries.filter(e => String(e.id).startsWith('seed-')).length;
     if (!n || !confirm(`Remove ${n} sets that came from your past notes?`)) return;
+    db.entries.filter(e => String(e.id).startsWith('seed-')).forEach(e => queueDel(e.id));
     db.entries = db.entries.filter(e => !String(e.id).startsWith('seed-'));
     save();
+    syncSoon();
     toast(`Removed ${n} sets`);
   });
 
@@ -727,7 +745,10 @@
       db.custom.push(...(data.custom || []).filter(c => c && c.id && !haveC.has(c.id)));
       db.settings = Object.assign({}, data.settings || {}, db.settings);
       db.last = Object.assign({}, data.last || {}, db.last);
+      newEntries.forEach(e => queueAdd(e.id));
+      db.configDirty = true;
       save();
+      syncSoon();
       render();
       toast(`Imported ${newEntries.length} sets`);
     } catch (e) {
@@ -736,6 +757,14 @@
   });
 
   $('#clearAll').addEventListener('click', () => {
+    if (cloud()) {
+      if (!confirm('Clear the copy on this device and reload everything from your Google Sheet? The sheet is not changed.')) return;
+      db = emptyDb();
+      save();
+      render();
+      syncNow({ pull: true });
+      return;
+    }
     if (!confirm('Delete ALL logged sets, custom exercises and settings on this device?')) return;
     if (!confirm('Really? This cannot be undone. Export a backup first if unsure.')) return;
     db = emptyDb();
@@ -744,8 +773,171 @@
     toast('All data deleted');
   });
 
+  // =====================================================================
+  // GOOGLE SHEET SYNC
+  // The sheet is the source of truth. This device keeps a copy so logging
+  // works offline; changes wait in pendingAdd / pendingDel until they upload.
+  // =====================================================================
+  const CLOUD_KEY = 'gymlog.cloud';
+  const sync = { busy: false, again: false, state: 'off', msg: '', timer: 0 };
+
+  function cloud() {
+    try {
+      const c = JSON.parse(localStorage.getItem(CLOUD_KEY));
+      return c && c.url && c.key ? c : null;
+    } catch (e) { return null; }
+  }
+  function setCloud(c) {
+    try { c ? localStorage.setItem(CLOUD_KEY, JSON.stringify(c)) : localStorage.removeItem(CLOUD_KEY); }
+    catch (e) { /* ignore */ }
+  }
+
+  function queueAdd(id) {
+    if (!db.pendingAdd.includes(id)) db.pendingAdd.push(id);
+  }
+  function queueDel(id) {
+    const i = db.pendingAdd.indexOf(id);
+    if (i >= 0) db.pendingAdd.splice(i, 1); // never uploaded, nothing to delete in the sheet
+    else if (!db.pendingDel.includes(id)) db.pendingDel.push(id);
+  }
+  const pendingCount = () => db.pendingAdd.length + db.pendingDel.length + (db.configDirty ? 1 : 0);
+
+  function rowFor(e) {
+    const ex = exById(e.ex);
+    return Object.assign({}, e, { name: ex.name, day: ex.day, type: ex.type });
+  }
+
+  function syncSoon() {
+    clearTimeout(sync.timer);
+    sync.timer = setTimeout(() => syncNow({ pull: false }), 300);
+  }
+
+  async function syncNow({ pull = true } = {}) {
+    const c = cloud();
+    if (!c) { setSync('off'); return; }
+    if (sync.busy) { sync.again = true; return; }
+    if (!navigator.onLine) { setSync('offline'); return; }
+    sync.busy = true;
+    setSync('syncing');
+
+    const addIds = [...db.pendingAdd];
+    const delIds = [...db.pendingDel];
+    const sendConfig = db.configDirty;
+    const byId = new Map(db.entries.map(e => [e.id, e]));
+    const body = { key: c.key, add: addIds.map(id => byId.get(id)).filter(Boolean).map(rowFor), del: delIds, list: pull };
+    if (sendConfig) { body.config = { custom: db.custom, bw: Number(db.settings.bw) || 0 }; db.configDirty = false; }
+
+    try {
+      let res;
+      try {
+        // Plain-text body keeps this a "simple" request, so Apps Script needs no CORS preflight.
+        res = await fetch(c.url, { method: 'POST', body: JSON.stringify(body) });
+      } catch (e) {
+        throw new Error("Can't reach Google. Changes are saved on this phone and will upload later.");
+      }
+      let data;
+      try { data = await res.json(); }
+      catch (e) { throw new Error("That URL didn't answer like the Gym Log script. Check the web app URL and that access is set to \"Anyone\"."); }
+      if (!data.ok) throw new Error(data.error === 'wrong key' ? 'Wrong secret key. Copy it again from the Apps Script log.' : (data.error || 'The sheet returned an error.'));
+
+      db.pendingAdd = db.pendingAdd.filter(id => !addIds.includes(id));
+      db.pendingDel = db.pendingDel.filter(id => !delIds.includes(id));
+      if (pull && Array.isArray(data.entries)) {
+        const waiting = db.entries.filter(e => db.pendingAdd.includes(e.id));
+        const gone = new Set(db.pendingDel);
+        db.entries = data.entries.filter(e => !gone.has(e.id)).concat(waiting);
+        if (data.config && !db.configDirty) {
+          if (Array.isArray(data.config.custom)) db.custom = data.config.custom;
+          if ('bw' in data.config) db.settings.bw = data.config.bw;
+        } else if (!data.config && (db.custom.length || db.settings.bw)) {
+          db.configDirty = true; // sheet has no settings yet: send ours
+          sync.again = true;
+        }
+      }
+      db.lastSync = Date.now();
+      save();
+      setSync('ok');
+      if (view !== 'settings') render();
+      else if (!document.activeElement || !document.activeElement.matches('#view-settings input')) renderSettings();
+    } catch (err) {
+      if (sendConfig) db.configDirty = true;
+      save();
+      setSync(navigator.onLine ? 'error' : 'offline', err.message);
+    } finally {
+      sync.busy = false;
+      if (sync.again) { sync.again = false; syncNow({ pull: false }); }
+    }
+  }
+
+  function setSync(state, msg = '') {
+    sync.state = state;
+    sync.msg = msg;
+    const n = pendingCount();
+    const pill = $('#syncPill');
+    const text = {
+      off: 'Not backed up',
+      syncing: 'Saving…',
+      ok: n ? `${n} waiting` : 'Saved to Sheet',
+      offline: n ? `Offline · ${n} waiting` : 'Offline',
+      error: 'Sync problem',
+    }[state];
+    pill.textContent = text;
+    pill.className = 'sync-pill ' + (state === 'ok' && !n ? 'good' : state === 'syncing' ? '' : 'warn');
+    if (view === 'settings') renderCloudStatus();
+  }
+
+  function renderCloudStatus() {
+    const c = cloud();
+    const n = pendingCount();
+    let s;
+    if (!c) s = 'Not connected. Sets are only on this device.';
+    else if (sync.state === 'error' || sync.state === 'offline') s = sync.msg || 'Offline. Changes will upload when you are back online.';
+    else if (sync.state === 'syncing') s = 'Saving to your Google Sheet…';
+    else s = `Connected.${db.lastSync ? ' Last synced ' + fmtTime(db.lastSync) + '.' : ''}${n ? ` ${n} change(s) waiting.` : ' Everything is saved.'}`;
+    $('#cloudStatus').textContent = s;
+    $('#cloudDisconnect').hidden = !c;
+    $('#cloudSync').hidden = !c;
+  }
+
+  $('#syncPill').addEventListener('click', () => {
+    if (cloud() && sync.state !== 'error') syncNow({ pull: true });
+    else showView('settings');
+  });
+
+  $('#cloudConnect').addEventListener('click', async () => {
+    const url = $('#cloudUrl').value.trim();
+    const key = $('#cloudKey').value.trim();
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
+      $('#cloudStatus').textContent = 'The web app URL should start with https://script.google.com/ and end with /exec.';
+      return;
+    }
+    if (!key) { $('#cloudStatus').textContent = 'Paste your secret key too.'; return; }
+    setCloud({ url, key });
+    db.entries.forEach(e => queueAdd(e.id)); // upload what this device already has; the sheet skips duplicates
+    save();
+    await syncNow({ pull: true });
+    if (sync.state === 'ok') toast('Connected to your Google Sheet');
+  });
+
+  $('#cloudSync').addEventListener('click', () => syncNow({ pull: true }));
+
+  $('#cloudDisconnect').addEventListener('click', () => {
+    if (!confirm('Disconnect this device from the Google Sheet? Your sheet and this device keep their data.')) return;
+    setCloud(null);
+    setSync('off');
+    renderSettings();
+  });
+
+  window.addEventListener('online', () => syncNow({ pull: true }));
+  window.addEventListener('offline', () => setSync('offline'));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncNow({ pull: true });
+  });
+  setInterval(() => { if (pendingCount()) syncNow({ pull: false }); }, 60000);
+
   // ---------- start ----------
   render();
+  syncNow({ pull: true });
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
