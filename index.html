@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111317">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Gym Log</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Gym Log</h1>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="log">Log</button>
+      <button class="tab" data-view="history">History</button>
+      <button class="tab" data-view="progress">Progress</button>
+      <button class="tab" data-view="settings">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-log" class="view active">
+      <div class="day-row" id="dayRow"></div>
+      <div id="exList"></div>
+    </section>
+
+    <section id="view-history" class="view">
+      <div id="historyList"></div>
+    </section>
+
+    <section id="view-progress" class="view">
+      <div class="filter-row">
+        <select id="progEx" aria-label="Exercise"></select>
+        <div class="seg" id="progMetric"></div>
+      </div>
+      <div id="progBody"></div>
+    </section>
+
+    <section id="view-settings" class="view">
+      <div class="panel">
+        <h2>Body weight</h2>
+        <p class="muted">Used for assisted pull-ups: effective load = body weight − assist.</p>
+        <div class="inline">
+          <input id="bwInput" type="number" inputmode="decimal" min="0" step="0.5" placeholder="e.g. 170">
+          <span>lb</span>
+          <button class="btn" id="bwSave">Save</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Add an exercise</h2>
+        <form id="customForm" class="stack">
+          <input name="name" required placeholder="Name, e.g. Romanian Deadlift">
+          <div class="inline">
+            <select name="type" id="customType"></select>
+            <select name="day" id="customDay"></select>
+          </div>
+          <input name="target" placeholder="Target, e.g. 3 × 10">
+          <button class="btn primary" type="submit">Add exercise</button>
+        </form>
+        <div id="customList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Your past notes</h2>
+        <p class="muted">Loads the sets from your written log (Push / Pull / Legs) so progress charts start with history.
+          Real dates weren't in the notes, so each session is placed one week apart, ending the week of Oct 12, 2026,
+          and marked “est. date”. Safe to press twice. It won't duplicate.</p>
+        <button class="btn" id="loadSeed">Load past notes</button>
+        <button class="btn" id="removeSeed">Remove past notes</button>
+      </div>
+
+      <div class="panel">
+        <h2>Backup</h2>
+        <p class="muted">Data is saved on this device only. Export a backup now and then.</p>
+        <div class="inline wrap">
+          <button class="btn" id="exportJson">Export backup (JSON)</button>
+          <button class="btn" id="exportCsv">Export CSV</button>
+          <label class="btn">Import backup<input type="file" id="importJson" accept="application/json,.json" hidden></label>
+        </div>
+      </div>
+
+      <div class="panel danger">
+        <h2>Danger zone</h2>
+        <button class="btn danger" id="clearAll">Delete all data</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="seed.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
