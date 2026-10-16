@@ -17,7 +17,10 @@ Sheet in your own Drive. The app loads from that Sheet when it opens, so your lo
 1. In the toolbar, make sure the function dropdown says **setup**, then click **▶ Run**.
 2. Google asks for permission: **Review permissions** → pick your account → "Google hasn't verified this app" →
    **Advanced** → **Go to Gym Log (unsafe)** → **Allow**.
-   That warning appears because this is your own script, not one from the Google store. It only touches this spreadsheet.
+   That warning appears because this is your own script, not one from the Google store. The permission screen should
+   say it can see and edit **this spreadsheet only**; the script can't open any other file in the account.
+   Tip: do these steps signed in as the account that should own the data (for example a separate Google account just
+   for this), since the web app runs as whoever deploys it.
 3. The **Execution log** at the bottom shows `Your secret key (paste it into the app): …`. Copy that key.
 
 ## 4. Publish it as a web app
