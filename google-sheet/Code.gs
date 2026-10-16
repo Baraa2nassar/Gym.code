@@ -1,6 +1,11 @@
-// Gym Log: Google Sheet backend.
-// Paste this whole file into Extensions → Apps Script of your Google Sheet.
-// Setup steps are in google-sheet/README.md.
+/**
+ * Gym Log: Google Sheet backend.
+ * Paste this whole file into Extensions → Apps Script of your Google Sheet.
+ * Setup steps are in google-sheet/README.md.
+ *
+ * @OnlyCurrentDoc  Limits the script to this one spreadsheet, so Google never
+ *                  grants it access to any other files in the account.
+ */
 
 /** @OnlyCurrentDoc */
 // ^ Limits the script's permission to this one spreadsheet, not your whole Drive.
