@@ -7,9 +7,6 @@
  *                  grants it access to any other files in the account.
  */
 
-/** @OnlyCurrentDoc */
-// ^ Limits the script's permission to this one spreadsheet, not your whole Drive.
-
 const SHEET_NAME = 'Sets';
 const HEADERS = ['id', 'when', 'day', 'exercise', 'weight_lb', 'weight_kg', 'reps',
   'bar_lb', 'plates_per_side', 'pr', 'est_date', 'exercise_id', 'type'];
